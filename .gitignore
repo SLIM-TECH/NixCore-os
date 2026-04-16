@@ -1,0 +1,52 @@
+# Build artifacts
+build/
+*.o
+*.bin
+*.pe
+*.elf
+*.img
+*.iso
+
+# Logs
+*.log
+*.txt
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+
+# Dependencies
+*.dll
+*.so
+*.dylib
+
+# Executables
+*.exe
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Project specific
+grubtmp/
+iso_fix/
+.openclaude/

@@ -1,0 +1,61 @@
+CC = gcc
+LD = ld
+OBJCOPY = objcopy
+
+UEFI_INC = /usr/include/efi
+UEFI_LIB = /usr/lib
+
+CFLAGS = -ffreestanding -fno-stack-protector -fpic -fshort-wchar \
+         -mno-red-zone -I$(UEFI_INC) -I$(UEFI_INC)/x86_64 -DEFI_FUNCTION_WRAPPER
+
+LDFLAGS = -nostdlib -znocombreloc -T /usr/lib/elf_x86_64_efi.lds -shared \
+          -Bsymbolic -L$(UEFI_LIB) $(UEFI_LIB)/crt0-efi-x86_64.o
+
+LIBS = -lefi -lgnuefi
+
+all: nixcore.img
+
+# Build UEFI bootloader
+boot/uefi_boot.o: boot/uefi_boot.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+boot/BOOTX64.so: boot/uefi_boot.o
+	$(LD) $(LDFLAGS) $< -o $@ $(LIBS)
+
+boot/BOOTX64.EFI: boot/BOOTX64.so
+	$(OBJCOPY) -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
+	           -j .rel -j .rela -j .reloc --target=efi-app-x86_64 $< $@
+
+# Build kernel
+kernel/kernel_uefi.o: kernel/kernel_uefi.c
+	$(CC) -m64 -ffreestanding -fno-stack-protector -mno-red-zone \
+	      -c $< -o $@
+
+kernel/KERNEL.ELF: kernel/kernel_uefi.o
+	$(LD) -T kernel_uefi.ld $< -o $@
+
+# Create UEFI disk image
+nixcore.img: boot/BOOTX64.EFI kernel/KERNEL.ELF
+	dd if=/dev/zero of=nixcore.img bs=1M count=100
+	mkfs.vfat -F 32 nixcore.img
+	mmd -i nixcore.img ::/EFI
+	mmd -i nixcore.img ::/EFI/BOOT
+	mmd -i nixcore.img ::/EFI/NIXCORE
+	mcopy -i nixcore.img boot/BOOTX64.EFI ::/EFI/BOOT/
+	mcopy -i nixcore.img kernel/KERNEL.ELF ::/EFI/NIXCORE/
+	@echo "==================================="
+	@echo "NixCore UEFI build complete!"
+	@echo "Run: qemu-system-x86_64 -bios /usr/share/ovmf/OVMF.fd -drive format=raw,file=nixcore.img -m 512M"
+	@echo "==================================="
+
+run: nixcore.img
+	qemu-system-x86_64 -bios /usr/share/ovmf/OVMF.fd \
+	                   -drive format=raw,file=nixcore.img \
+	                   -m 512M -net nic -net user
+
+clean:
+	rm -f boot/*.o boot/*.so boot/*.EFI
+	rm -f kernel/*.o kernel/*.ELF
+	rm -f nixcore.img
+
+.PHONY: all run clean
